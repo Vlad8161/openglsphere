@@ -11,6 +11,7 @@ import android.opengl.GLSurfaceView
 import android.opengl.GLUtils
 import android.opengl.Matrix
 import android.support.v4.view.animation.LinearOutSlowInInterpolator
+import android.util.Log
 import android.view.MotionEvent
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -26,7 +27,7 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
     private val POLYGON_COUNT = 4000
     private val POLYGON_SIZE = 0.02f
     private val SPHERE_RADIUS = 0.5f
-    private val VELOCITY_SCALE = 32f
+    private val VELOCITY_SCALE = 4f
     private val VELOCITY_STACK_SIZE = 10
     private val mProjectionMatrix = FloatArray(16)
     private var mProgramId: Int = 0
@@ -46,7 +47,7 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
 
     private var mOldSwipePosition: Float? = null
     private var mLastTime: Long = 0L
-    private var mLastVelocities = ArrayList<Float>()
+    private var mLastVelocities = ArrayList<Pair<Float, Long>>()
     private var mLastPlayTime: Long = 0L
 
     private var mRotationAngleAnimator: ValueAnimator? = null
@@ -120,17 +121,15 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
                 mLastVelocities.clear()
             }
             MotionEvent.ACTION_UP -> {
+                val currTime = System.currentTimeMillis()
                 val velocity = if (mLastVelocities.size > 0) {
                     mLastVelocities
-                            .also { it.mapIndexed { i, value -> value * i / (0 until mLastVelocities.size).sum() } }
-                            .also { it.sort() }
+                            .map { (it.first / Math.pow((currTime - it.second).toDouble(), 2.0) * 300f).toFloat() }
                             .sum() / mLastVelocities.size
-                            //.get(mLastVelocities.size / 2)
                 } else {
                     0f
                 }
                 animateAngle(velocity)
-                //animateAngle(mLastVelocities.sum() / mLastVelocities.size)
                 mOldSwipePosition = null
                 mLastVelocities.clear()
             }
@@ -140,14 +139,14 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
                 val currentTime = System.currentTimeMillis()
                 if (oldSwipePosition != null) {
                     var velocity = (newSwipePosition - oldSwipePosition) / width * VELOCITY_SCALE
-                    velocity = if (velocity < 0) {
-                        -Math.pow(-velocity.toDouble(), 2.0).toFloat()
-                    } else {
-                        Math.pow(velocity.toDouble(), 2.0).toFloat()
-                    }
-                    velocity /= currentTime - mLastTime
+                    //velocity = if (velocity < 0) {
+                        //-Math.pow(-velocity.toDouble(), 2.0).toFloat()
+                    //} else {
+                        //Math.pow(velocity.toDouble(), 2.0).toFloat()
+                    //}
+                    //velocity /= currentTime - mLastTime
                     mRotationAngle += velocity
-                    mLastVelocities.add(velocity)
+                    mLastVelocities.add(Pair(velocity, mLastTime))
                 }
                 if (mLastVelocities.size > VELOCITY_STACK_SIZE) {
                     mLastVelocities.removeAt(VELOCITY_STACK_SIZE)
