@@ -138,13 +138,7 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
                 val oldSwipePosition = mOldSwipePosition
                 val currentTime = System.currentTimeMillis()
                 if (oldSwipePosition != null) {
-                    var velocity = (newSwipePosition - oldSwipePosition) / width * VELOCITY_SCALE
-                    //velocity = if (velocity < 0) {
-                        //-Math.pow(-velocity.toDouble(), 2.0).toFloat()
-                    //} else {
-                        //Math.pow(velocity.toDouble(), 2.0).toFloat()
-                    //}
-                    //velocity /= currentTime - mLastTime
+                    val velocity = (newSwipePosition - oldSwipePosition) / width * VELOCITY_SCALE
                     mRotationAngle += velocity
                     mLastVelocities.add(Pair(velocity, mLastTime))
                 }
