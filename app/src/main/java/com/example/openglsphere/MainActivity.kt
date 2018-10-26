@@ -8,7 +8,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sphereView = SphereView(this)
+        val images = assets.list("")
+                .filter { it.endsWith("png") }
+        sphereView = SphereView(this, images)
         setContentView(sphereView)
     }
 

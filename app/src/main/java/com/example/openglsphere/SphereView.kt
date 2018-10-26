@@ -11,7 +11,6 @@ import android.opengl.GLSurfaceView
 import android.opengl.GLUtils
 import android.opengl.Matrix
 import android.support.v4.view.animation.LinearOutSlowInInterpolator
-import android.util.Log
 import android.view.MotionEvent
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -23,12 +22,17 @@ import javax.microedition.khronos.opengles.GL10
  * Created by applexis on 24.10.18.
  */
 
-class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Renderer {
+class SphereView(
+        context: Context,
+        val images: List<String>
+) : GLSurfaceView(context), GLSurfaceView.Renderer {
     private val POLYGON_COUNT = 4000
-    private val POLYGON_SIZE = 0.02f
+    private val POLYGON_SIZE = 0.017f
     private val SPHERE_RADIUS = 0.5f
+    private val SPHERE_DISTANCE = 12f
     private val VELOCITY_SCALE = 4f
     private val VELOCITY_STACK_SIZE = 10
+
     private val mProjectionMatrix = FloatArray(16)
     private var mProgramId: Int = 0
     private var mVertexShaderId: Int = 0
@@ -36,13 +40,15 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
     private var mAngleXLocation: Int = 0
     private var mAngleYLocation: Int = 0
     private var mRotationAngleLocation: Int = 0
+    private var mSphereDistanceLocation: Int = 0
     private var mTextureLocation: Int = 0
     private var mTextureUnitLocation: Int = 0
 
-    private var mTextureId: Int = 0
+    private var mTextures: List<Int> = ArrayList()
 
     private val xAngles = FloatArray(POLYGON_COUNT)
     private val yAngles = FloatArray(POLYGON_COUNT)
+    private val mPolygonTextures = IntArray(POLYGON_COUNT)
     private var mRotationAngle = 0f
 
     private var mOldSwipePosition: Float? = null
@@ -58,19 +64,20 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
         uniform float u_AngleX;
         uniform float u_AngleY;
         uniform float u_RotationAngle;
+        uniform float u_SphereDistance;
         uniform mat4 u_ProjectionMatrix;
         varying vec2 v_Texture;
 
         float pi = 3.1415926;
 
-        mat4 translateZ = mat4(
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, -18, 1
-        );
-
         void main() {
+            mat4 translateZ = mat4(
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, -u_SphereDistance, 1
+            );
+
             float angleY = u_AngleY + u_RotationAngle;
             mat4 rotX = mat4(
                 1,          0,           0, 0,
@@ -154,11 +161,12 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
 
     override fun onDrawFrame(gl: GL10) {
         glClear(GL_COLOR_BUFFER_BIT)
+        glUniform1f(mSphereDistanceLocation, SPHERE_DISTANCE)
         for (i in 0 until POLYGON_COUNT) {
             glUniform1f(mAngleXLocation, xAngles[i])
             glUniform1f(mAngleYLocation, yAngles[i])
             glActiveTexture(GLES20.GL_TEXTURE0)
-            glBindTexture(GLES20.GL_TEXTURE_2D, mTextureLocation)
+            glBindTexture(GLES20.GL_TEXTURE_2D, mPolygonTextures[i])
             glUniform1i(mTextureUnitLocation, GLES20.GL_TEXTURE0)
             glUniform1f(mRotationAngleLocation, mRotationAngle)
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
@@ -229,6 +237,7 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
         mAngleYLocation = glGetUniformLocation(mProgramId, "u_AngleY")
         mTextureUnitLocation = glGetUniformLocation(mProgramId, "u_TextureUnit")
         mRotationAngleLocation = glGetUniformLocation(mProgramId, "u_RotationAngle")
+        mSphereDistanceLocation = glGetUniformLocation(mProgramId, "u_SphereDistance")
 
         val uColorLocation = glGetUniformLocation(mProgramId, "u_Color")
         glUniform4f(uColorLocation, 1.0f, 0.0f, 0.0f, 1.0f)
@@ -282,24 +291,30 @@ class SphereView(context: Context?) : GLSurfaceView(context), GLSurfaceView.Rend
     }
 
     private fun createTextures() {
+        GLES20.glEnable(GLES20.GL_BLEND)
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        mTextures = images.map { loadTextureFromAssets(it) }
+        for (i in 0 until POLYGON_COUNT) {
+            mPolygonTextures[i] = mTextures[Math.abs(Random().nextInt()) % mTextures.size]
+        }
+    }
+
+    private fun loadTextureFromAssets(fileName: String): Int {
         val textureIds = IntArray(1)
         glGenTextures(1, textureIds, 0)
         if (textureIds[0] == 0) {
             throw RuntimeException("Unable to create textures")
         }
 
-        GLES20.glEnable(GLES20.GL_BLEND)
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
-
-        val bmp = BitmapFactory.decodeResource(resources, R.drawable.ic_stat_name)
+        val bmp = context.assets.open(fileName).use { BitmapFactory.decodeStream(it) }
         GLES20.glActiveTexture(GL_TEXTURE0)
         GLES20.glBindTexture(GL_TEXTURE_2D, textureIds[0])
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
         bmp.recycle()
-        GLES20.glBindTexture(GL_TEXTURE_2D, textureIds[0])
-        mTextureId = textureIds[0]
+        GLES20.glBindTexture(GL_TEXTURE_2D, 0)
+        return textureIds[0]
     }
 
     private fun animateAngle(velocity: Float) {
